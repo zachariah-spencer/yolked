@@ -1,3 +1,11 @@
+# TODO
+# 1. Click combos
+# 2. SFX
+# 3. BG Music Track
+# 4. Prettier Buttons
+# 5. Universal font
+# 6. Check grindiness for upgrade pathing
+
 def tick(args)
   args.state.game_started ||= false
   args.state.game_completed ||= false

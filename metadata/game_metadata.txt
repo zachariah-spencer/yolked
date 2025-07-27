@@ -18,7 +18,7 @@
 # - 0: pixel perfect scaling (use this if your game uses pixel-art)
 # - 1: less blocky visuals,
 # - 2: higher computational overhead than linear, but provides the best visual quality
-# scale_quality=0
+scale_quality=2
 
 # === Directories to Ignore during packaging ===
 # A comma delimited list of directories that should be ignored during the
@@ -58,11 +58,11 @@
 # HD Mode: when enabled, will give you 720p, 1080p, 1440p, 4k, and 5k rendering options
 # Check out the following YouTube Video for a demo of DragonRuby's HD Capabilities
 # https://youtu.be/Rnc6z84zaa4
-# hd=false
+hd=true
 
 # === High DPI ===
 # Setting this property to true will enable High DPI rendering (try in combination with scale_quality to see what looks best)
-# highdpi=false
+highdpi=true
 
 # === Texture Atlases ===
 # See sample app for texture atlas usage: =./samples/07_advanced_rendering_hd/02_texture_atlases=
@@ -74,13 +74,13 @@
 # NOTE: remove your game's letter box will mean more work for you since you have to
 #       think about what you want to render outside of the games main 1280x720 logical
 #       area.
-# hd_letterbox=true
+hd_letterbox=true
 
 # === Scaling options for All Screen Mode ===
 # You can specify the maximum scale for your game. hd_max_scale's default value is 0 which
 # means "stretch to fit" (while retaining a 16:9 aspect ratio). This scaling method is not
 # pixel perfect, but is a reasonable default for most games.
-# hd_max_scale=0
+hd_max_scale=0
 
 # hd_max_scale values other than 0 *will* be pixel perfect. Resolutions higher than your max scale
 # will give more area outside of your safe area that can be rendered to (if hd_letterbox=false)
