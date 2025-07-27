@@ -1,11 +1,3 @@
-# TODO
-# 1. Click combos DONE
-# 2. SFX DONE 
-# 3. BG Music Track DONE
-# 4. Prettier Buttons
-# 5. Universal font DONE
-# 6. Check grindiness for upgrade pathing DONE
-
 def tick(args)
   args.state.game_started ||= false
   args.state.game_completed ||= false
@@ -14,8 +6,8 @@ def tick(args)
   args.state.egg_spawn_time ||= 1.0.seconds
   args.state.egg_fall_speed ||= 0.1
   args.state.last_click_tick ||= 0
-  args.state.splat_score ||= 0
-  args.state.catch_score ||= 0
+  args.state.splat_score ||= 500
+  args.state.catch_score ||= 500
   args.state.upgrade_tier ||= 1
   args.state.upgrades_purchased ||= 0
   args.state.combo ||= 1
@@ -371,7 +363,9 @@ def calc_baskets(args)
 
       if e.intersect_rect?(b[:catch_rect])
         args.audio["sfx_catch_#{Numeric.rand(0..5000)}"] = {
-          input: "sounds/catch.wav"
+          input: "sounds/catch.wav",
+          gain: 0.1,
+          pitch: Numeric.rand(1.8..2.2)
         }
         e[:caught] = true
         reset_basket_target(args, b)
