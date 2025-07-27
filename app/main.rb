@@ -1,7 +1,14 @@
 def tick(args)
+  args.state.game_started ||= false
+  args.state.game_completed ||= false
   args.state.timer ||= 0
+  args.state.egg_spawn_time ||= 1.5.seconds
+  args.state.egg_fall_speed ||= 0.1
+  args.state.last_click_tick ||= 0
   args.state.splat_score ||= 0
   args.state.catch_score ||= 0
+  args.state.upgrade_tier ||= 1
+  args.state.upgrades_purchased ||= 0
   args.state.eggs ||= []
   args.state.splats ||= []
   args.state.baskets ||= []
@@ -14,7 +21,7 @@ def tick(args)
       x: 32,
       y: args.grid.h - 128 - 32,
       text: "Buy Automated Basket",
-      splat_price: 5,
+      splat_price: 10,
       catch_price: 0,
       upgrade_id: 0
     )
@@ -29,17 +36,39 @@ def calc(args)
   calc_eggs(args)
   calc_splats(args)
   calc_baskets(args)
+  calc_upgrade_tiers(args)
+  calc_clicks(args)
+end
+
+def calc_clicks(args)
+  args.state.eggs.each do |e|
+    if args.inputs.mouse.click && e.intersect_rect?(args.inputs.mouse)
+      args.state.game_started = true if !args.state.game_started
+      e[:clicked] = true
+      if args.inputs.mouse.x - (e[:x] + 40) >= 0
+        e[:dx] = Numeric.rand(-5..0)
+      else
+        e[:dx] = Numeric.rand(0..5)
+      end
+      
+      e[:dy] = 10
+    end
+  end
 end
 
 def calc_buttons(args)
   args.state.buttons.each do |b|
-    if args.inputs.mouse.click && args.inputs.mouse.intersect_rect?(b)
+    if args.inputs.mouse.click && args.inputs.mouse.intersect_rect?(b) && args.state.last_click_tick.elapsed_time >= 0.1.seconds
       if !b[:purchased] && args.state.splat_score >= b[:splat_price] &&
            args.state.catch_score >= b[:catch_price]
+
+        args.state.last_click_tick = Kernel.tick_count
         args.state.splat_score -= b[:splat_price]
         args.state.catch_score -= b[:catch_price]
 
         b[:purchased] = true
+        args.state.upgrades_purchased += 1
+        calc_upgrade(args, b[:upgrade_id])
       end
     end
 
@@ -52,21 +81,190 @@ def calc_buttons(args)
   end
 end
 
+def calc_upgrade(args, id)
+  case id
+  when 0
+    args.state.baskets << basket(x: 32, y: 64)
+  when 1
+    args.state.baskets.each { |b| b[:speed] += 4 }
+  when 2
+    args.state.baskets.each { |b| b[:targeting_delay] -= 0.5.seconds if b[:targeting_delay] >= 0.5.seconds }
+  when 3
+    args.state.baskets << basket(x: 32, y: 64)
+  when 4
+    args.state.baskets.each { |b| b[:speed] += 4 }
+  when 5
+    args.state.baskets.each { |b| b[:targeting_delay] -= 0.5.seconds if b[:targeting_delay] >= 0.5.seconds }
+  when 6
+    args.state.baskets << basket(x: 32, y: 64)
+  when 7
+    args.state.egg_spawn_time -= 0.75.seconds
+  when 8
+    args.state.baskets.each { |b| b[:targeting_delay] -= 0.5.seconds if b[:targeting_delay] >= 0.5.seconds }
+  when 9
+    args.state.baskets.each { |b| b[:speed] += 4 }
+  when 10
+    args.state.egg_spawn_time = 0.1.seconds
+    args.state.egg_fall_speed = 4.0
+  when 11
+    args.state.baskets.each { |b| b[:speed] = 32 }
+    args.state.baskets.each { |b| b[:targeting_delay] = 0 }
+  end
+end
+
+def calc_upgrade_tiers(args)
+  case args.state.upgrades_purchased
+  when 1
+    unlock_upgrade_tier(args, 2) if args.state.upgrade_tier != 2
+  when 3
+    unlock_upgrade_tier(args, 3) if args.state.upgrade_tier != 3
+  when 6
+    unlock_upgrade_tier(args, 4) if args.state.upgrade_tier != 4
+  when 10
+    unlock_upgrade_tier(args, 5) if args.state.upgrade_tier != 5
+  when 12
+    args.state.game_completed = true
+  end
+end
+
+def unlock_upgrade_tier(args, tier)
+  case tier
+  when 2
+    args.state.upgrade_tier = 2
+    args.state.buttons << buy_button(
+        args,
+        x: 32,
+        y: args.grid.h - 128 - 32,
+        text: "Upgrade Baskets Hover Speed",
+        splat_price: 10,
+        catch_price: 5,
+        upgrade_id: 1
+      )
+    args.state.buttons << buy_button(
+      args,
+      x: 32,
+      y: args.grid.h - ((128 * 2) + 16) - 32,
+      text: "Upgrade Baskets Target Speed",
+      splat_price: 10,
+      catch_price: 10,
+      upgrade_id: 2
+    )
+  when 3
+    args.state.upgrade_tier = 3
+    args.state.buttons << buy_button(
+        args,
+        x: 32,
+        y: args.grid.h - 128 - 32,
+        text: "Buy Second Automated Basket",
+        splat_price: 5,
+        catch_price: 15,
+        upgrade_id: 3
+      )
+    args.state.buttons << buy_button(
+      args,
+      x: 32,
+      y: args.grid.h - ((128 * 2) + 16) - 32,
+      text: "Upgrade Baskets Hover Speed",
+      splat_price: 5,
+      catch_price: 20,
+      upgrade_id: 4
+    )
+    args.state.buttons << buy_button(
+      args,
+      x: 32,
+      y: args.grid.h - ((128 * 3) + 32) - 32,
+      text: "Upgrade Baskets Target Speed",
+      splat_price: 10,
+      catch_price: 30,
+      upgrade_id: 5
+    )
+  when 4
+    args.state.upgrade_tier = 4
+    args.state.buttons << buy_button(
+        args,
+        x: 32,
+        y: args.grid.h - 128 - 32,
+        text: "Buy Third Automated Basket",
+        splat_price: 10,
+        catch_price: 40,
+        upgrade_id: 6
+      )
+    args.state.buttons << buy_button(
+      args,
+      x: 32,
+      y: args.grid.h - ((128 * 2) + 16) - 32,
+      text: "Upgrade Egg Spawn Speed",
+      splat_price: 5,
+      catch_price: 45,
+      upgrade_id: 7
+    )
+    args.state.buttons << buy_button(
+      args,
+      x: 32,
+      y: args.grid.h - ((128 * 3) + 32) - 32,
+      text: "Upgrade Baskets Target Speed",
+      splat_price: 15,
+      catch_price: 45,
+      upgrade_id: 8
+    )
+    args.state.buttons << buy_button(
+      args,
+      x: 32,
+      y: args.grid.h - ((128 * 4) + 48) - 32,
+      text: "Upgrade Baskets Hover Speed",
+      splat_price: 10,
+      catch_price: 50,
+      upgrade_id: 9
+    )
+  when 5
+    args.state.upgrade_tier = 5
+    args.state.buttons << buy_button(
+        args,
+        x: 32,
+        y: args.grid.h - 128 - 32,
+        text: "EGG-STORM",
+        splat_price: 15,
+        catch_price: 75,
+        upgrade_id: 10
+      )
+    args.state.buttons << buy_button(
+      args,
+      x: 32,
+      y: args.grid.h - ((128 * 2) + 16) - 32,
+      text: "SUPER-BOTS",
+      splat_price: 25,
+      catch_price: 125,
+      upgrade_id: 11
+    )
+  end
+end
+
 def calc_eggs(args)
-  if args.state.timer.elapsed_time >= 1.seconds
+  if args.state.timer.elapsed_time >= args.state.egg_spawn_time
     args.state.eggs << egg
     args.state.timer = Kernel.tick_count
   end
   args.state.eggs.each do |egg|
-    egg.y -= 5
-    if egg.y <= egg[:h] + 8
-      egg.smashed = true
-      args.state.splats << splat(x: egg[:x] - 40, y: egg[:y])
-      args.state.splat_score += 1
+    if egg[:clicked]
+      egg.dy -= args.state.egg_fall_speed * 10
+    else
+      egg.dy -= args.state.egg_fall_speed
     end
 
-    args.state.eggs.reject! { |egg| egg.smashed }
+    egg[:x] += egg[:dx]
+    egg[:y] += egg[:dy]
+
+    if egg.y <= egg[:h] + 4
+      smash_egg(args, egg)
+    end
+    args.state.eggs.reject! { |egg| egg.smashed || egg.caught }
   end
+end
+
+def smash_egg(args, egg)
+  egg.smashed = true
+  args.state.splats << splat(x: egg[:x] - 40, y: egg[:y])
+  args.state.splat_score += 1 if args.state.game_started
 end
 
 def calc_splats(args)
@@ -80,19 +278,90 @@ def calc_splats(args)
 end
 
 def calc_baskets(args)
+  args.state.baskets.each do |b|
+    b[:catch_rect] = {
+      x: b[:x] + 80,
+      y: (b[:y] + 32),
+      w: 80,
+      h: 32
+    }
+
+
+    closest_egg_distance = 2000.0
+    args.state.eggs.each do |e|
+      # selecting a new target
+      distance_to_egg = args.geometry.distance(b,e)
+      if !b[:target_egg] && b[:targeting_delay_tick].elapsed_time >= b[:targeting_delay]
+        if distance_to_egg <= closest_egg_distance
+          closest_egg_distance = distance_to_egg
+          if !e[:targeted]
+            b[:target_egg] = e
+            e[:targeted] = true
+          end
+
+          
+        elsif args.state.eggs.length <= 0
+          reset_basket_target(args, b)
+        end
+      end
+
+      if e.intersect_rect?(b[:catch_rect])
+        e[:caught] = true
+        reset_basket_target(args, b)
+        args.state.catch_score += 1
+      end
+    end
+
+    if b[:target_egg]
+      adj_egg_rect = {
+        x: b[:target_egg][:x] - 40,
+        y: b[:target_egg][:y] - 64,
+        w: b[:target_egg][:w],
+        h: b[:target_egg][:h],
+      }
+      target_direction = args.geometry.vec2_normalize(
+        args.geometry.vec2_subtract(adj_egg_rect, b)
+        )
+      b[:dx] = target_direction[:x] * b[:speed]
+      b[:dy] = target_direction[:y] * b[:speed]
+      b[:dy] = oscillation(args, 0.1) if b[:y] >= 450
+
+      reset_basket_target(args, b) if b[:target_egg][:smashed] || b[:target_egg][:caught]
+    else
+      b[:dx] = 0
+      b[:dy] = oscillation(args, 0.1)  
+    end
+
+    b[:x] += b[:dx]
+    b[:y] += b[:dy]
+  end
 end
+
+def reset_basket_target(args, basket)
+  basket[:target_egg] = nil
+  basket[:targeting_delay_tick] = Kernel.tick_count
+end
+
+def oscillation(args, speed = 0.05)
+  2 * Math.sin(args.state.tick_count * speed)
+end
+
+
 
 def egg
   {
-    vx: 0,
-    vy: 0,
+    dx: 0,
+    dy: 0,
     x: Numeric.rand(80..(GTK.args.grid.w - 160)),
     y: 720,
     w: 80,
     h: 80,
     path: "sprites/egg.png",
     angle: Numeric.rand(0..360),
-    smashed: false
+    smashed: false,
+    caught: false,
+    targeted: false,
+    clicked: false,
   }
 end
 
@@ -116,15 +385,28 @@ def basket(x:, y:)
   {
     x: x,
     y: y,
-    w: 80,
+    w: 160,
     h: 80,
     path: "sprites/basket.png",
+    tile_x: 0,
+    tile_y: 0,
+    tile_w: 160,
+    tile_h: 80,
     angle: 0,
-    created_tick: Kernel.tick_count
+    created_tick: Kernel.tick_count,
+    target_egg: nil,
+    dx: 0,
+    dy: 0,
+    speed: 4,
+    catch_rect: {
+      x: x,
+      y: (y + 16),
+      w: 160,
+      h: 80
+    },
+    targeting_delay_tick: Kernel.tick_count,
+    targeting_delay: 1.5.seconds
   }
-end
-
-def shop_widget
 end
 
 def buy_button(args, x:, y:, text:, splat_price:, catch_price:, upgrade_id:)
@@ -187,16 +469,33 @@ def buy_button(args, x:, y:, text:, splat_price:, catch_price:, upgrade_id:)
     splat_price: splat_price,
     catch_price: catch_price,
     purchased_tick: nil,
-    a: 255
+    a: 255,
+    r: 255,
   }
+end
+
+def can_purchase?(args, button)
+  button[:splat_price] <= args.state.splat_score && button[:catch_price] <= args.state.catch_score
 end
 
 def render(args)
   args.outputs.solids << { x: 0, y: 0, w: 1280, h: 720, r: 100, g: 100, b: 180 }
 
-  args.state.baskets.each do |basket|
-    basket[:angle]
-    args.outputs.sprites << basket
+  args.state.baskets.each do |b|
+    frame =
+      Numeric.frame_index(
+        start_at: b[:created_tick],
+        count: 6,
+        hold_for: 5,
+        repeat: true
+      )
+    if frame
+      anim =
+        b.merge({ tile_x: frame * 160, tile_y: 0, tile_w: 160, tile_h: 80 })
+    else
+      anim = b.merge({ tile_x: 2 * 160, tile_y: 0, tile_w: 160, tile_h: 80 })
+    end
+    args.outputs.sprites << anim
   end
 
   args.state.eggs.each do |egg|
@@ -221,47 +520,82 @@ def render(args)
     args.outputs.sprites << anim
   end
 
-  args.state.buttons.each { |b| args.outputs.sprites << b }
+  if args.state.game_started
+    args.state.buttons.each do |b|
+      b[:r] = can_purchase?(args, b) ? 100 : 255
+      args.outputs.sprites << b
+    end
 
-  args.outputs.labels << {
-    x: args.grid.w / 2 - 64,
-    y: args.grid.h - 32,
-    size_px: 26,
-    alignment_enum: 1,
-    r: 220,
-    g: 220,
-    b: 50,
-    text: "SPLATS"
-  }
-  args.outputs.labels << {
-    x: args.grid.w / 2 - 64,
-    y: args.grid.h - 64,
-    size_px: 26,
-    alignment_enum: 1,
-    r: 220,
-    g: 220,
-    b: 50,
-    text: "#{args.state.splat_score}"
-  }
+    args.outputs.labels << {
+      x: args.grid.w / 2 - 64,
+      y: args.grid.h - 32,
+      size_px: 26,
+      alignment_enum: 1,
+      r: 220,
+      g: 220,
+      b: 50,
+      text: "SPLATS"
+    }
+    args.outputs.labels << {
+      x: args.grid.w / 2 - 64,
+      y: args.grid.h - 64,
+      size_px: 26,
+      alignment_enum: 1,
+      r: 220,
+      g: 220,
+      b: 50,
+      text: "#{args.state.splat_score}"
+    }
 
-  args.outputs.labels << {
-    x: args.grid.w / 2 + 64,
-    y: args.grid.h - 32,
-    size_px: 26,
-    alignment_enum: 1,
-    r: 220,
-    g: 220,
-    b: 50,
-    text: "CATCHES"
-  }
-  args.outputs.labels << {
-    x: args.grid.w / 2 + 64,
-    y: args.grid.h - 64,
-    size_px: 26,
-    alignment_enum: 1,
-    r: 220,
-    g: 220,
-    b: 50,
-    text: "#{args.state.catch_score}"
-  }
+    args.outputs.labels << {
+      x: args.grid.w / 2 + 64,
+      y: args.grid.h - 32,
+      size_px: 26,
+      alignment_enum: 1,
+      r: 220,
+      g: 220,
+      b: 50,
+      text: "CATCHES"
+    }
+    args.outputs.labels << {
+      x: args.grid.w / 2 + 64,
+      y: args.grid.h - 64,
+      size_px: 26,
+      alignment_enum: 1,
+      r: 220,
+      g: 220,
+      b: 50,
+      text: "#{args.state.catch_score}"
+    }
+  else
+    args.outputs.labels << {
+      x: args.grid.w / 2,
+      y: args.grid.h / 2,
+      size_px: 32,
+      alignment_enum: 1,
+      r: 220,
+      g: 220,
+      b: 50,
+      a: alpha_osc,
+      text: "CLICK AN EGG TO PLAY"
+    }
+  end
+
+  if args.state.game_completed
+    args.outputs.labels << {
+      x: args.grid.w / 2,
+      y: args.grid.h / 2,
+      size_px: 32,
+      alignment_enum: 1,
+      r: 220,
+      g: 220,
+      b: 50,
+      a: alpha_osc,
+      text: "CONGRATULATIONS! YOU WIN!"
+    }
+  end
+end
+
+def alpha_osc
+  (100 * Math.sin(Kernel.tick_count * 0.08)) + 155
 end
