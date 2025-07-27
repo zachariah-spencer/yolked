@@ -6,8 +6,8 @@ def tick(args)
   args.state.egg_spawn_time ||= 1.0.seconds
   args.state.egg_fall_speed ||= 0.1
   args.state.last_click_tick ||= 0
-  args.state.splat_score ||= 500
-  args.state.catch_score ||= 500
+  args.state.splat_score ||= 0
+  args.state.catch_score ||= 0
   args.state.upgrade_tier ||= 1
   args.state.upgrades_purchased ||= 0
   args.state.combo ||= 1
@@ -646,15 +646,15 @@ def render(args)
 
     if args.state.combo > 1
       args.outputs.labels << {
-        x: args.grid.w / 2,
-        y: args.grid.h / 2,
+        x: args.state.combo_egg[:x] + 40,
+        y: args.state.combo_egg[:y] - 8,
         size_px: alpha_osc / 2,
         alignment_enum: 1,
         r: 255,
         g: 255,
         b: 0,
         a: 255,
-        text: "#{args.state.combo}X!!!",
+        text: "#{args.state.combo}X!",
         font: "fonts/hennypenny.ttf"
       }
     end
