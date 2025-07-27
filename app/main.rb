@@ -1,22 +1,25 @@
 # TODO
-# 1. Click combos
-# 2. SFX
-# 3. BG Music Track
+# 1. Click combos DONE
+# 2. SFX DONE 
+# 3. BG Music Track DONE
 # 4. Prettier Buttons
-# 5. Universal font
-# 6. Check grindiness for upgrade pathing
+# 5. Universal font DONE
+# 6. Check grindiness for upgrade pathing DONE
 
 def tick(args)
   args.state.game_started ||= false
   args.state.game_completed ||= false
+  args.state.game_completed_tick ||= nil
   args.state.timer ||= 0
-  args.state.egg_spawn_time ||= 1.5.seconds
+  args.state.egg_spawn_time ||= 1.0.seconds
   args.state.egg_fall_speed ||= 0.1
   args.state.last_click_tick ||= 0
   args.state.splat_score ||= 0
   args.state.catch_score ||= 0
   args.state.upgrade_tier ||= 1
   args.state.upgrades_purchased ||= 0
+  args.state.combo ||= 1
+  args.state.combo_egg ||= nil
   args.state.eggs ||= []
   args.state.splats ||= []
   args.state.baskets ||= []
@@ -24,6 +27,12 @@ def tick(args)
 
   # initialize buttons
   if Kernel.tick_count == 0
+    args.audio[:music] = {
+      input: "sounds/bossa_nova.mp3",
+      gain: 0.15,
+      looping: true,
+    }
+
     args.state.buttons << buy_button(
       args,
       x: 32,
@@ -49,8 +58,25 @@ def calc(args)
 end
 
 def calc_clicks(args)
+  GTK.reset_next_tick if args.state.game_completed_tick && args.inputs.mouse.click && args.state.game_completed_tick.elapsed_time >= 1.seconds
+
   args.state.eggs.each do |e|
     if args.inputs.mouse.click && e.intersect_rect?(args.inputs.mouse)
+      # start new combo
+      if !args.state.combo_egg || args.state.combo_egg != e
+        args.state.combo_egg = e
+        args.state.combo = 1
+      # continue combo
+      elsif args.state.combo_egg && args.state.combo_egg == e
+        args.state.combo += 1
+      end
+
+      args.audio["sfx_egg_click"] = { 
+        input: "sounds/ui/switch7.wav", 
+        gain: 0.75,
+        pitch: 1.0 + (args.state.combo * 0.25)
+      }
+
       args.state.game_started = true if !args.state.game_started
       e[:clicked] = true
       if args.inputs.mouse.x - (e[:x] + 40) >= 0
@@ -66,6 +92,18 @@ end
 
 def calc_buttons(args)
   args.state.buttons.each do |b|
+    is_hovering = args.inputs.mouse.intersect_rect?(b)
+    if is_hovering != b[:hovered]
+      
+      if !b[:purchased_tick]
+        args.audio[:sfx_button_hover] = {
+          input: "sounds/ui/rollover2.wav",
+          gain: 20.0
+        }
+      end
+      b[:hovered] = is_hovering
+    end
+
     if args.inputs.mouse.click && args.inputs.mouse.intersect_rect?(b) && args.state.last_click_tick.elapsed_time >= 0.1.seconds
       if !b[:purchased] && args.state.splat_score >= b[:splat_price] &&
            args.state.catch_score >= b[:catch_price]
@@ -75,6 +113,10 @@ def calc_buttons(args)
         args.state.catch_score -= b[:catch_price]
 
         b[:purchased] = true
+        args.audio[:sfx_button_purchased] = {
+          input: "sounds/ui/switch30.wav",
+          gain: 0.2
+        }
         args.state.upgrades_purchased += 1
         calc_upgrade(args, b[:upgrade_id])
       end
@@ -106,7 +148,7 @@ def calc_upgrade(args, id)
   when 6
     args.state.baskets << basket(x: 32, y: 64)
   when 7
-    args.state.egg_spawn_time -= 0.75.seconds
+    args.state.egg_spawn_time -= 0.5.seconds
   when 8
     args.state.baskets.each { |b| b[:targeting_delay] -= 0.5.seconds if b[:targeting_delay] >= 0.5.seconds }
   when 9
@@ -131,7 +173,8 @@ def calc_upgrade_tiers(args)
   when 10
     unlock_upgrade_tier(args, 5) if args.state.upgrade_tier != 5
   when 12
-    args.state.game_completed = true
+    args.state.game_completed = true if !args.state.game_completed
+    args.state.game_completed_tick = Kernel.tick_count if !args.state.game_completed_tick
   end
 end
 
@@ -193,7 +236,7 @@ def unlock_upgrade_tier(args, tier)
         x: 32,
         y: args.grid.h - 128 - 32,
         text: "Buy Third Automated Basket",
-        splat_price: 10,
+        splat_price: 5,
         catch_price: 40,
         upgrade_id: 6
       )
@@ -211,7 +254,7 @@ def unlock_upgrade_tier(args, tier)
       x: 32,
       y: args.grid.h - ((128 * 3) + 32) - 32,
       text: "Upgrade Baskets Target Speed",
-      splat_price: 15,
+      splat_price: 5,
       catch_price: 45,
       upgrade_id: 8
     )
@@ -220,7 +263,7 @@ def unlock_upgrade_tier(args, tier)
       x: 32,
       y: args.grid.h - ((128 * 4) + 48) - 32,
       text: "Upgrade Baskets Hover Speed",
-      splat_price: 10,
+      splat_price: 5,
       catch_price: 50,
       upgrade_id: 9
     )
@@ -231,7 +274,7 @@ def unlock_upgrade_tier(args, tier)
         x: 32,
         y: args.grid.h - 128 - 32,
         text: "EGG-STORM",
-        splat_price: 15,
+        splat_price: 5,
         catch_price: 75,
         upgrade_id: 10
       )
@@ -240,7 +283,7 @@ def unlock_upgrade_tier(args, tier)
       x: 32,
       y: args.grid.h - ((128 * 2) + 16) - 32,
       text: "SUPER-BOTS",
-      splat_price: 25,
+      splat_price: 125,
       catch_price: 125,
       upgrade_id: 11
     )
@@ -270,9 +313,21 @@ def calc_eggs(args)
 end
 
 def smash_egg(args, egg)
+  args.audio["sfx_splat_#{args.state.splats.length}"] = { 
+    input: "sounds/splat.wav", 
+    gain: 0.5,
+    pitch: Numeric.rand(0.9..1.2)
+  }
   egg.smashed = true
   args.state.splats << splat(x: egg[:x] - 40, y: egg[:y])
-  args.state.splat_score += 1 if args.state.game_started
+  if args.state.game_started
+    if args.state.combo_egg == egg
+      args.state.splat_score += 1 * args.state.combo 
+      args.state.combo = 1
+    else
+      args.state.splat_score += 1
+    end
+  end
 end
 
 def calc_splats(args)
@@ -287,6 +342,7 @@ end
 
 def calc_baskets(args)
   args.state.baskets.each do |b|
+
     b[:catch_rect] = {
       x: b[:x] + 80,
       y: (b[:y] + 32),
@@ -314,9 +370,18 @@ def calc_baskets(args)
       end
 
       if e.intersect_rect?(b[:catch_rect])
+        args.audio["sfx_catch_#{Numeric.rand(0..5000)}"] = {
+          input: "sounds/catch.wav"
+        }
         e[:caught] = true
         reset_basket_target(args, b)
-        args.state.catch_score += 1
+
+        if args.state.combo_egg == e
+          args.state.catch_score += 1 * args.state.combo 
+          args.state.combo = 1
+        else
+          args.state.catch_score += 1
+        end
       end
     end
 
@@ -337,7 +402,8 @@ def calc_baskets(args)
       reset_basket_target(args, b) if b[:target_egg][:smashed] || b[:target_egg][:caught]
     else
       b[:dx] = 0
-      b[:dy] = oscillation(args, 0.1)  
+      b[:dy] = oscillation(args, 0.1)
+      b[:dy] -= 2 if b[:y] >= 200
     end
 
     b[:x] += b[:dx]
@@ -413,7 +479,7 @@ def basket(x:, y:)
       h: 80
     },
     targeting_delay_tick: Kernel.tick_count,
-    targeting_delay: 1.5.seconds
+    targeting_delay: 1.5.seconds,
   }
 end
 
@@ -429,7 +495,7 @@ def buy_button(args, x:, y:, text:, splat_price:, catch_price:, upgrade_id:)
     r: 80,
     g: 80,
     b: 80,
-    a: 150
+    a: 30
   }
 
   args.outputs["buy_button_#{args.state.buttons.length}"].labels << {
@@ -441,7 +507,8 @@ def buy_button(args, x:, y:, text:, splat_price:, catch_price:, upgrade_id:)
     text: "#{text}",
     r: 220,
     g: 220,
-    b: 50
+    b: 50,
+    font: "fonts/hennypenny.ttf"
   }
   args.outputs["buy_button_#{args.state.buttons.length}"].labels << {
     x: 128,
@@ -452,7 +519,8 @@ def buy_button(args, x:, y:, text:, splat_price:, catch_price:, upgrade_id:)
     text: "#{splat_price} SPLATS",
     r: 220,
     g: 220,
-    b: 50
+    b: 50,
+    font: "fonts/hennypenny.ttf"
   }
   args.outputs["buy_button_#{args.state.buttons.length}"].labels << {
     x: 128,
@@ -463,7 +531,8 @@ def buy_button(args, x:, y:, text:, splat_price:, catch_price:, upgrade_id:)
     text: "#{catch_price} CATCHES",
     r: 220,
     g: 220,
-    b: 50
+    b: 50,
+    font: "fonts/hennypenny.ttf"
   }
 
   {
@@ -477,6 +546,7 @@ def buy_button(args, x:, y:, text:, splat_price:, catch_price:, upgrade_id:)
     splat_price: splat_price,
     catch_price: catch_price,
     purchased_tick: nil,
+    hovered: false,
     a: 255,
     r: 255,
   }
@@ -542,7 +612,8 @@ def render(args)
       r: 220,
       g: 220,
       b: 50,
-      text: "SPLATS"
+      text: "SPLATS",
+      font: "fonts/hennypenny.ttf"
     }
     args.outputs.labels << {
       x: args.grid.w / 2 - 64,
@@ -552,7 +623,8 @@ def render(args)
       r: 220,
       g: 220,
       b: 50,
-      text: "#{args.state.splat_score}"
+      text: "#{args.state.splat_score}",
+      font: "fonts/hennypenny.ttf"
     }
 
     args.outputs.labels << {
@@ -563,7 +635,8 @@ def render(args)
       r: 220,
       g: 220,
       b: 50,
-      text: "CATCHES"
+      text: "CATCHES",
+      font: "fonts/hennypenny.ttf"
     }
     args.outputs.labels << {
       x: args.grid.w / 2 + 64,
@@ -573,8 +646,25 @@ def render(args)
       r: 220,
       g: 220,
       b: 50,
-      text: "#{args.state.catch_score}"
+      text: "#{args.state.catch_score}",
+      font: "fonts/hennypenny.ttf"
     }
+
+    if args.state.combo > 1
+      args.outputs.labels << {
+        x: args.grid.w / 2,
+        y: args.grid.h / 2,
+        size_px: alpha_osc / 2,
+        alignment_enum: 1,
+        r: 255,
+        g: 255,
+        b: 0,
+        a: 255,
+        text: "#{args.state.combo}X!!!",
+        font: "fonts/hennypenny.ttf"
+      }
+    end
+
   else
     args.outputs.labels << {
       x: args.grid.w / 2,
@@ -585,7 +675,8 @@ def render(args)
       g: 220,
       b: 50,
       a: alpha_osc,
-      text: "CLICK AN EGG TO PLAY"
+      text: "CLICK AN EGG TO PLAY",
+      font: "fonts/hennypenny.ttf"
     }
   end
 
@@ -599,8 +690,24 @@ def render(args)
       g: 220,
       b: 50,
       a: alpha_osc,
-      text: "CONGRATULATIONS! YOU WIN!"
+      text: "CONGRATULATIONS! YOU WIN!",
+      font: "fonts/hennypenny.ttf"
     }
+
+    if args.state.game_completed_tick.elapsed_time >= 3.seconds
+      args.outputs.labels << {
+        x: args.grid.w / 2,
+        y: args.grid.h / 2 - 32,
+        size_px: 32,
+        alignment_enum: 1,
+        r: 220,
+        g: 220,
+        b: 50,
+        a: alpha_osc,
+        text: "CLICK TO RESTART",
+        font: "fonts/hennypenny.ttf"
+      }
+    end
   end
 end
 
